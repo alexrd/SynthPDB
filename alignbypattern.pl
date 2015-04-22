@@ -15,15 +15,20 @@ alignbypattern.pl
 Alex Dickson
 University of Michigan
 
-This script takes a folder full of pdbs, and aligns them according to a pattern of conserved residues.
+This script takes a folder full of pdbs, and aligns them in sequence according to a pattern of conserved residues.
 If the pattern is found more than once it will align to each instance, and then print a warning.
+The output pdbs are sorted by which chain was matched to the given sequence.
 
 The first argument is a colon-separated list of the residues that are conserved using one-letter codes.
 Multiple residues can be specified to allow for flexibility:
 e.g. Y:N:ILVM:DN 
 
 The second argument is a colon-separated list of the corresponding residue indices.
+The output pdbs are aligned in sequence such that the matching residues have these indices.
 e.g. 412:428:425:421
+
+If during the alignment process, negative indices would be obtained, these residues are put on a new chain, X, and 
+their residue numbers are left unchanged.  To avoid this, consider shifting these values upward, by a constant.
 ");
     exit(0);
 }
@@ -39,6 +44,8 @@ if (scalar @files == 0) {
     print("No pdbs in this directory!\n");
     &help;
 }
+
+my $shiftupnexttime = 0;
 
 for my $file (@files) {
 
@@ -126,6 +133,9 @@ for my $file (@files) {
 		    if ($chain eq $matchchain[$i]) {
 			my $newnum = $resnum - $matchnum[$i] + $index[0];
 			if ($newnum < 0) {
+			    if (-$newnum > $shiftupnexttime) {
+				$shiftupnexttime = -$newnum;
+			    }
 			    $newnum = $resnum;
 			    substr($line,21,1,"X");
 			} else {
@@ -145,3 +155,16 @@ for my $file (@files) {
 	}
     }
 }
+
+if ($shiftupnexttime > 0) {
+    print(STDERR "Warning:  negative residue indices were shifted to chain X. 
+To avoid this next time, shift indices upward by $shiftupnexttime like so:
+");
+
+    for (@index) {
+	$_ += $shiftupnexttime;
+    }
+    my $tmp = join(':',@index);
+    print(STDERR "$tmp\n");
+}
+
