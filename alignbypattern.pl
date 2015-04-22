@@ -67,7 +67,7 @@ for my $file (@files) {
 		my $aa = $symb{$resi{$c}{$n}};
 		if ($residue[0] =~ m/$aa/) {   # the first one matches, check the rest
 
-		    print("following up on chain $c num $n : resid = $aa\n");
+#		    print("following up on chain $c num $n : resid = $aa\n");
 
 		    my $match = 1;
 		    for my $i (1..@residue-1) {
@@ -77,11 +77,11 @@ for my $file (@files) {
 			    if (exists $resi{$c}{$ni}) {
 				my $aai = $symb{$resi{$c}{$ni}};
 				if (!($residue[$i] =~ m/$aai/)) {
-				    print("does not match because of resid $ni : $resi{$c}{$ni} : ($aai insteead of $residue[$i])\n");
+#				    print("does not match because of resid $ni : $resi{$c}{$ni} : ($aai instead of $residue[$i])\n");
 				    $match = 0;
 				}
 			    } else {
-				print("resi $resi{$c}{$ni} does not exist in the table\n");
+#				print("resi $resi{$c}{$ni} does not exist in the table\n");
 				$match = 0;
 			    }
 			}		   
@@ -98,31 +98,25 @@ for my $file (@files) {
     if (scalar @matchchain == 0) {
 	print(STDERR "no sequence matches found for $file\n");
     } else {
-	if (scalar @matchchain > 1) {
-	    my %tmp;
-	    my $dupl = 0;
-	    for (@matchchain) {
-		if (exists $tmp{$_}) {
-		    $dupl = 1;
-		}
-		$tmp{$_} = 1;
-	    }
-	    if ($dupl) {
-		print(STDERR "multiple sequence matches in a chain found for ${file}:");
-		for my $i (0..@matchchain-1) {
-		    print(STDERR "($matchchain[$i])$matchnum[$i] ");
-		}
-		print(STDERR "\n");
-	    }
-	}
+	my $senterr = 0;
+	my %chains;
 	for my $i (0..@matchchain-1) {
-	    my $outfile = $file;
-	    if ($i == 0) {
-		$outfile =~ s/\.pdb/_align\.pdb/;
+	    if (!exists $chains{$matchchain[$i]}) {
+		$chains{$matchchain[$i]} = 1;
 	    } else {
-		my $j = $i + 1;
-		$outfile =~ s/\.pdb/_align${j}\.pdb/;
+		$chains{$matchchain[$i]}++;
+		if (!$senterr) {
+		    print(STDERR "multiple sequence matches found for $file ");
+		    for my $j (0..@matchchain-1) {
+			print(STDERR "($matchchain[$j])$matchnum[$j] ");
+		    }
+		    print(STDERR "\n");
+		    $senterr = 1;
+		}
 	    }
+	    my $outfile = $file;
+	    $outfile =~ s/\.pdb/_align_${matchchain[$i]}$chains{$matchchain[$i]}\.pdb/;
+
 	    open(MYOUT,">$outfile");
 	    open(MYIN,"$file");
 	    while (my $line = <MYIN>) {
