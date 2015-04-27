@@ -66,8 +66,8 @@ my %nosubsets = %alignseq;
 for my $u1 (keys %alignseq) {
     my @s1 = split(//,$alignseq{$u1});
     for my $u2 (keys %alignseq) {
-	my $nd1 = ($alignseq{$u1} =~ m/(-)/g);
-	my $nd2 = ($alignseq{$u2} =~ m/(-)/g);
+	my $nd1 = () = $alignseq{$u1} =~ m/(-)/g;
+	my $nd2 = () = $alignseq{$u2} =~ m/(-)/g;
 	if ($nd1 > $nd2) {  # u1 has more dashes:  is it a subset of u2?
 	    my @s2 = split(//,$alignseq{$u2});
 	    my $match = 1;
