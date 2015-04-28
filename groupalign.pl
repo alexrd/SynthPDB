@@ -205,7 +205,7 @@ for my $file (@files) {
 		    #   structures, and only keep 'A'
 
 		    my $reso = substr($line,16,1);
-		    if (($reso ne " ") && ($reso ne "A")) {  # discard all resolutions that are not "A"
+		    if (($reso eq " ") || ($reso eq "A")) {  # discard all resolutions that are not "A"
 
 			if ($chain eq $matchchain) {  # write out modified residue number
 			    my $newnum;
@@ -233,9 +233,9 @@ for my $file (@files) {
 			} else {
 			    print(MYOUT $line);
 			}
-		    } else {
-			print(MYOUT $line);
 		    }
+		} else {
+		    print(MYOUT $line);
 		}
 	    }
 	    close(MYIN);

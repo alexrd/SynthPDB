@@ -3,22 +3,36 @@
 use strict;
 use File::Copy;
 
-my @index = split(/:/,shift(@ARGV));
 my $vmdtext = "/Developer/Applications/VMD\\ 1.9.1.app/Contents/MacOS/startup.command -dispdev text";
+
+my $alignfile = shift(@ARGV);
+my $alignres = shift(@ARGV);
+my $template = shift(@ARGV);
 
 sub help {
     print("
 alignstructures.pl
 
+Usage:  alignstructures.pl alignfile alignres template.pdb
+
 Alex Dickson
 University of Michigan
 
 This script takes a folder full of pdbs, and aligns them in space using VMD.
-It assumes that alignbypattern.pl was used to align the pdbs by sequence, and 
-looks for pdb files of the form NAME_align_X1.pdb, where X is the chain that is aligned.
+It assumes that groupalign.pl was used to align the pdbs by sequence, and 
+looks for pdb files in the seqalign/ directory, which have the form *_Xn.pdb
+where X is the chain that is aligned, and n is an index that keeps track of how many such pdbs 
+there are.
 
-The resulting structure-aligned pdbs are saved as NAME_struct_align_X1.pdb (etc..),
-and the RMSD for each is written to rmsd_struct_align.dat.
+The resulting structure-aligned pdbs are saved in the structalign/ directory as NAME_struct_align_X1.pdb (etc..),
+and the RMSD for each is written to structalign/rmsd_struct_align.dat.
+
+The first argument is the alignment file used in groupalign.pl
+
+The second argument is the index of alignment used in groupalign.pl.
+
+The third argument is the name of the pdb to be used as an alignment template, this should be one of the
+files in the seqalign/ directory.
 
 The current vmd command (in text mode) is set to:
 $vmdtext
@@ -26,46 +40,84 @@ $vmdtext
     exit(0);
 }
 
-if (scalar @index == 0) {    	  
-    print("Usage:  ind1:ind2:ind3:..\n");
+if (!-f $alignfile) {    
+    print("Error:  alignfile does not exist!\n");
     &help;
 }
 
-my @files = split(/\n/,`ls *align*.pdb`);
+my @files = split(/\n/,`ls seqalign/*.pdb`);
 
 if (scalar @files == 0) {
-    print("No aligned pdbs in this directory!\n");
+    print("Error:  no pdbs in the seqalign/ directory!\n");
     &help;
 }
 
-my $template = shift(@files);
-(my $tmplchain) = ($template =~ m/align_([A-Z])/);
+if (!-f $template) {
+    print("Error:  template PDB does not exist!\n");
+    &help;
+}
 
-# write selection strings (with dashes in place of spaces, so its treated as one word)
-my $sel = "resid-";
-for (@index) { $sel .= "${_}-" ; } 
-my $sel2 = $sel."and-backbone-and-chain-$tmplchain";
+(my $tmplchain) = ($template =~ m/([A-Z])[0-9]\.pdb/);
+(my $tmplID) = ($template =~ m/align_([A-Z0-9]+_[0-9]+)_/);
 
-open(RMSDOUT,">rmsd_struct_align.dat");
-print(RMSDOUT "$template 0\n");
+my %alignseq;
+# read alignfile
+open(MYIN,$alignfile);
+while (my $line = <MYIN>) {
+    chomp($line);
+    my @arr = split(/\s+/,$line);
+    if (defined $arr[0] && $arr[0] ne "CLUSTAL") {
+	$alignseq{$arr[0]} .= "$arr[1]";
+    }
+}
+close(MYIN);
+
+if (!-d "structalign") {
+    mkdir("structalign");
+}
+
+open(RMSDOUT,">structalign/rmsd_struct_align.dat");
 
 for my $file (@files) {
 
-    # amend selection string with the proper chain
-    (my $chain) = ($file =~ m/align_([A-Z])/);
-    my $sel1 .= $sel."and-backbone-and-chain-$chain";
+    # get ID and chain of file
+    (my $fileID) = ($file =~ m/align_([A-Z0-9]+_[0-9]+)_/);
+    (my $chain) = ($file =~ m/([A-Z])[0-9]\.pdb/);
 
-    # align file using VMD
-    system("$vmdtext -eofexit -args $file $template $sel1 $sel2 trmsd.out < align_2structs.tcl > t.log");
+    # get list of common residues using alignseq
+    my @common;
+    for my $i (0..length($alignseq{$fileID})-1) {
+	if (substr($alignseq{$fileID},$i,1) ne "-" && substr($alignseq{$tmplID},$i,1) ne "-") {
+	    push(@common,$i+$alignres);
+	}
+    }
 
-    # move t.pdb file to its unique name
-    my $newfile = $file;
-    $newfile =~ s/align/struct_align/;
-    move("t.pdb",$newfile);
+    if (scalar @common == 0) {
+	print(STDERR "Error! no common residues between $fileID and $tmplID!");
+    } else {
+    
+	# write selection strings (with dashes in place of spaces, so its treated as one word)
+	my $sel = "resid-";
+	for (@common) { $sel .= "${_}-" ; } 
+	my $sel2 = $sel."and-name-CA-and-chain-$tmplchain";
+	my $sel1 = $sel."and-name-CA-and-chain-$chain";
+	
+	# align file using VMD
+	system("$vmdtext -eofexit -args $file $template $sel1 $sel2 trmsd.out < align_2structs.tcl > t.log");
 
-    # print rmsd
-    my $rmsd = `cat trmsd.out`;
-    print(RMSDOUT "$file $rmsd");
+	# move t.pdb file to its unique name
+	my $newfile = $file;
+	$newfile =~ s/align/struct_align/;
+	$newfile =~ s/seqalign/structalign/;
+	move("t.pdb",$newfile);
 
+	# print rmsd
+	my $rmsd = `cat trmsd.out`;
+	if ($rmsd =~ m/X/) {
+	    print(STDERR "Error in rmsd calculation between $fileID and $tmplID");
+	} else {
+	    print(RMSDOUT "$file $rmsd");
+	}
+    }
 }
 close(RMSDOUT);
