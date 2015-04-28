@@ -112,7 +112,7 @@ for my $file (@files) {
 	    my $chain = substr($line,21,1);
 	    my $resnum = substr($line,22,4);
 	    $resnum =~ s/\s+//;
-
+	    
 	    if (!defined $lowres{$chain} || $resnum < $lowres{$chain}) {
 		$lowres{$chain} = $resnum;
 	    }
@@ -200,34 +200,42 @@ for my $file (@files) {
 		    my $chain = substr($line,21,1);
 		    my $resnum = substr($line,22,4);
 		    $resnum =~ s/\s+//;
-		    if ($chain eq $matchchain) {  # write out modified residue number
-			my $newnum;
-			if ($resnum < $match[$i]{"startres"}) {
-			    $newnum = $resnum - $match[$i]{"startres"} + $alignres;
-			} else {  # shift up, taking dashes in sequence file into account
-			    my $n = scalar @{$ndashbef{$match[$i]{'ID'}}};
-			    my $tmp = $resnum-$match[$i]{"startres"};
-			    if ($tmp >= $n) {
-				$tmp = $n -1;
+		    
+		    # preprocessing : for visualization and alignment, look for multiple resolutions in crystal
+		    #   structures, and only keep 'A'
+
+		    my $reso = substr($line,16,1);
+		    if (($reso ne " ") && ($reso ne "A")) {  # discard all resolutions that are not "A"
+
+			if ($chain eq $matchchain) {  # write out modified residue number
+			    my $newnum;
+			    if ($resnum < $match[$i]{"startres"}) {
+				$newnum = $resnum - $match[$i]{"startres"} + $alignres;
+			    } else {  # shift up, taking dashes in sequence file into account
+				my $n = scalar @{$ndashbef{$match[$i]{'ID'}}};
+				my $tmp = $resnum-$match[$i]{"startres"};
+				if ($tmp >= $n) {
+				    $tmp = $n -1;
+				}
+				$newnum = $resnum - $match[$i]{"startres"} + $alignres + $ndashbef{$match[$i]{'ID'}}[$tmp];
 			    }
-			    $newnum = $resnum - $match[$i]{"startres"} + $alignres + $ndashbef{$match[$i]{'ID'}}[$tmp];
-			}
-			if ($newnum < 0) {
-			    if (-$newnum > $shiftupnexttime) {
-				$shiftupnexttime = -$newnum;
+			    if ($newnum < 0) {
+				if (-$newnum > $shiftupnexttime) {
+				    $shiftupnexttime = -$newnum;
+				}
+				$newnum = $resnum;
+				substr($line,21,1,"X");  # put residue instead on chain X, write a warning at the end
+			    } else {
+				my $strnum = sprintf('%4s',$newnum);
+				substr($line,22,4,$strnum);
 			    }
-			    $newnum = $resnum;
-			    substr($line,21,1,"X");  # put residue instead on chain X, write a warning at the end
+			    print(MYOUT $line);
 			} else {
-			    my $strnum = sprintf('%4s',$newnum);
-			    substr($line,22,4,$strnum);
+			    print(MYOUT $line);
 			}
-			print(MYOUT $line);
 		    } else {
 			print(MYOUT $line);
 		    }
-		} else {
-		    print(MYOUT $line);
 		}
 	    }
 	    close(MYIN);
