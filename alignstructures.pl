@@ -107,8 +107,8 @@ for my $file (@files) {
 
 	# move t.pdb file to its unique name
 	my $newfile = $file;
-	$newfile =~ s/align/struct_align/;
 	$newfile =~ s/seqalign/structalign/;
+	$newfile =~ s/_align_/_struct_align_/;
 	move("t.pdb",$newfile);
 
 	# print rmsd
