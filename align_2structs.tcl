@@ -25,7 +25,7 @@ set num1 [$sel1 num]
 set num2 [$sel2 num]
 
 if { $num1 == $num2 } then {
-    set all [atomselect 0 all]
+    set all [atomselect 0 all frame 0]
 
     set trans_mat [measure fit $sel1 $sel2]
     $all move $trans_mat

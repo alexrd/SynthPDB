@@ -57,7 +57,7 @@ if (!-f $template) {
     &help;
 }
 
-(my $tmplchain) = ($template =~ m/([A-Z])[0-9]\.pdb/);
+(my $tmplchain) = ($template =~ m/([A-Z])\.pdb/);
 (my $tmplID) = ($template =~ m/align_([A-Z0-9]+_[0-9]+)_/);
 
 my %alignseq;
@@ -82,7 +82,7 @@ for my $file (@files) {
 
     # get ID and chain of file
     (my $fileID) = ($file =~ m/align_([A-Z0-9]+_[0-9]+)_/);
-    (my $chain) = ($file =~ m/([A-Z])[0-9]\.pdb/);
+    (my $chain) = ($file =~ m/([A-Z])\.pdb/);
 
     # get list of common residues using alignseq
     my @common;
@@ -93,7 +93,7 @@ for my $file (@files) {
     }
 
     if (scalar @common == 0) {
-	print(STDERR "Error! no common residues between $fileID and $tmplID!");
+	print(STDERR "Error! no common residues between $fileID and $tmplID!\n");
     } else {
     
 	# write selection strings (with dashes in place of spaces, so its treated as one word)
@@ -113,10 +113,16 @@ for my $file (@files) {
 
 	# print rmsd
 	my $rmsd = `cat trmsd.out`;
+	$rmsd =~ s/\s//g;
 	if ($rmsd =~ m/X/) {
-	    print(STDERR "Error in rmsd calculation between $fileID and $tmplID");
+	    print(STDERR "Error in rmsd calculation between $fileID and $tmplID\n");
+	    exit(0);
 	} else {
-	    print(RMSDOUT "$file $rmsd");
+	    print(RMSDOUT "$file\t$rmsd\n");
+	    if ($rmsd > 20) {
+		print("$vmdtext -eofexit -args $file $template $sel1 $sel2 trmsd.out < align_2structs.tcl > t.log");
+		die("puzzlingly high rmsd..");
+	    }
 	}
     }
 }

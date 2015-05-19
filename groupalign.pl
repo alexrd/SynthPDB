@@ -36,9 +36,10 @@ and the second word is the alignment for each sequence.  Multiple 'paragraphs' c
 they should be separated by two blank lines.  The first word identifier in each line of the second paragraph should 
 be the same as was given in the first paragraph:  the start residue does not need to be updated.
 
-The second argument is the index if the first amino acid in the alignment.  This will be shared among all the 
-aligned PDB files.  If during the alignment process, negative indices are obtained, these residues are put on 
-a new chain, X, and their residue numbers are left unchanged.  To avoid this, consider using a higher index value.
+The second argument is the index of the first amino acid in the alignment.  This will be shared among all the 
+aligned PDB files.  If during the alignment process, negative indices result, these residues are put on 
+a new chain, X, and their residue numbers are left unchanged, and a warning is printed at the end.
+To avoid this, consider using a higher index value.
 ");
     exit(0);
 }
@@ -61,7 +62,7 @@ if (!-d "seqalign") {
 
 # read alignment file
 
-my %alignseq;
+my %alignseq;  # stores the sequence
 my %ndashbef;  # stores the number of dashes before each amino acid
 
 open(MYIN,$alignfile);
@@ -161,7 +162,7 @@ for my $file (@files) {
 		foreach (@tmatch) {
 		    $_->{"ID"} = $s;
 		    $_->{"chain"} = $c;
-		    $_->{"startres"} += $lowres{$c};
+		    $_->{"startres"} += $lowres{$c};		    
 		    push(@match,$_);  # collect matches in @match array
 		}
 	    }
@@ -173,73 +174,74 @@ for my $file (@files) {
 	print(STDERR "no sequence matches found for $file\n");
     } else {
 	my $senterr = 0;
-	my %chains;
-	for my $i (0..@match-1) {
-	    if (!exists $chains{$match[$i]{"chain"}}) {
-		$chains{$match[$i]{"chain"}} = 1;
-	    } else {
-		$chains{$match[$i]{"chain"}}++;
-		if (!$senterr) {
-		    print(STDERR "multiple sequence matches found for $file ");
-		    for my $j (0..@match-1) {
-			print(STDERR "$match[$j]{'ID'}:($match[$j]{'chain'})$match[$j]{'startres'}-$match[$j]{'strength'} ");
+
+	for my $c (keys %resi) {
+	    my $longest = undef;  	# find the longest match in each chain
+	    my $long_index = undef;
+	    for my $i (0..@match-1) {
+		if ($c eq $match[$i]{"chain"}) {
+		    if (!defined $longest || length($seq{$match[$i]{'ID'}}) > $longest) {
+			$longest = length($seq{$match[$i]{'ID'}});
+			$long_index = $i;
 		    }
-		    print(STDERR "\n");
-		    $senterr = 1;
 		}
 	    }
-	    my $matchchain = $match[$i]{"chain"};
-	    my $chainind = $chains{$matchchain};
-	    my $outfile = $file;
-	    $outfile =~ s/\.pdb/_align_$match[$i]{'ID'}_${matchchain}${chainind}\.pdb/;
+	    
+	    if (defined $long_index) {
+		my $i = $long_index;
 
-	    open(MYOUT,">seqalign/$outfile");
-	    open(MYIN,"$file");
-	    while (my $line = <MYIN>) {
-		if ((substr($line,0,4) eq "ATOM" || substr($line,0,4) eq "TER ") || substr($line,0,6) eq "HETATM") { 
-		    my $chain = substr($line,21,1);
-		    my $resnum = substr($line,22,4);
-		    $resnum =~ s/\s+//;
-		    
-		    # preprocessing : for visualization and alignment, look for multiple resolutions in crystal
-		    #   structures, and only keep 'A'
+		my $matchchain = $match[$i]{"chain"};
+		my $outfile = $file;
+		$outfile =~ s/\.pdb/_align_$match[$i]{'ID'}_${matchchain}\.pdb/;
 
-		    my $reso = substr($line,16,1);
-		    if (($reso eq " ") || ($reso eq "A")) {  # discard all resolutions that are not "A"
-
-			if ($chain eq $matchchain) {  # write out modified residue number
-			    my $newnum;
-			    if ($resnum < $match[$i]{"startres"}) {
-				$newnum = $resnum - $match[$i]{"startres"} + $alignres;
-			    } else {  # shift up, taking dashes in sequence file into account
-				my $n = scalar @{$ndashbef{$match[$i]{'ID'}}};
-				my $tmp = $resnum-$match[$i]{"startres"};
-				if ($tmp >= $n) {
-				    $tmp = $n -1;
+		open(MYOUT,">seqalign/$outfile");
+		open(MYIN,"$file");
+		while (my $line = <MYIN>) {
+		    if ((substr($line,0,4) eq "ATOM" || substr($line,0,4) eq "TER ") || substr($line,0,6) eq "HETATM") { 
+			my $chain = substr($line,21,1);
+			my $resnum = substr($line,22,4);
+			$resnum =~ s/\s+//;
+			
+			# preprocessing : for visualization and alignment, look for multiple resolutions in crystal
+			#   structures, and only keep 'A'
+			
+			my $reso = substr($line,16,1);
+			if (($reso eq " ") || ($reso eq "A")) {  # discard all resolutions that are not "A"
+			    
+			    if ($chain eq $matchchain) {  # write out modified residue number
+				my $newnum;
+				if ($resnum < $match[$i]{"startres"}) {
+				    $newnum = $resnum - $match[$i]{"startres"} + $alignres;
+				} else {  # shift up, taking dashes in sequence file into account
+				    my $n = scalar @{$ndashbef{$match[$i]{'ID'}}};
+				    my $tmp = $resnum-$match[$i]{"startres"};
+				    if ($tmp >= $n) {
+					$tmp = $n -1;
+				    }
+				    $newnum = $resnum - $match[$i]{"startres"} + $alignres + $ndashbef{$match[$i]{'ID'}}[$tmp];
 				}
-				$newnum = $resnum - $match[$i]{"startres"} + $alignres + $ndashbef{$match[$i]{'ID'}}[$tmp];
-			    }
-			    if ($newnum < 0) {
-				if (-$newnum > $shiftupnexttime) {
-				    $shiftupnexttime = -$newnum;
+				if ($newnum < 0) {
+				    if (-$newnum > $shiftupnexttime) {
+					$shiftupnexttime = -$newnum;
+				    }
+				    $newnum = $resnum;
+				    substr($line,21,1,"X");  # put residue instead on chain X, write a warning at the end
+				} else {
+				    my $strnum = sprintf('%4s',$newnum);
+				    substr($line,22,4,$strnum);
 				}
-				$newnum = $resnum;
-				substr($line,21,1,"X");  # put residue instead on chain X, write a warning at the end
+				print(MYOUT $line);
 			    } else {
-				my $strnum = sprintf('%4s',$newnum);
-				substr($line,22,4,$strnum);
+				print(MYOUT $line);
 			    }
-			    print(MYOUT $line);
-			} else {
-			    print(MYOUT $line);
 			}
+		    } else {
+			print(MYOUT $line);
 		    }
-		} else {
-		    print(MYOUT $line);
 		}
+		close(MYIN);
+		close(MYOUT);
 	    }
-	    close(MYIN);
-	    close(MYOUT);
 	}
     }
 }
@@ -256,7 +258,6 @@ sub getmatch {
 # returns an array of two integer arrays,integer reporting on the match strength, and the starting residue
 #
 #    strength 1 = matches, but with X residues
-#    strength 2 = matches, but with missing residues
 #    strength 3 = matches
 
     my $seqpdb = shift;
@@ -265,30 +266,33 @@ sub getmatch {
     my @matches = ();
 
     if (length($seqpdb) >= length($seqalign)) {
-	my @pdbres = split(//,$seqpdb);
-	my @alignres = split(//,$seqalign);
 	for my $startres (0..length($seqpdb)-length($seqalign)) {
 	    my $match = 3;
 	    my $nresmatch = 0;
 	    my $i = 0;
-	    for my $res ($startres..$startres+length($seqalign)-1) {
+	    my $test = substr($seqpdb,$startres,length($seqalign));
+	    if ($test =~ m/\s/) {
+		$match = 0;
+	    } else {
+		for my $res ($startres..$startres+length($seqalign)-1) {
 		
-		if ($pdbres[$res] eq "X") {
-		    $match = 1;
-		} elsif ($pdbres[$res] eq " ") {
-		    $match = 2;
-		} elsif ($pdbres[$res] ne $alignres[$i]) {
-		    $match = 0;
-		    last;
-		} else {
-		    $nresmatch++;
+		    my $a = substr($seqpdb,$res,1);
+		    my $b = substr($seqalign,$i,1);
+		    if ($a eq "X") {
+			$match = 1;
+		    } elsif ($a ne $b) {
+			$match = 0;
+			last;
+		    } else {
+			$nresmatch++;
+		    }
+		    $i++;
 		}
-		$i++;
-	    }
-	    my $fracmatch = $nresmatch/(length($seqalign));
-	    if ($match > 0 && $fracmatch > 0.5) {
-		my %tmp = ("strength" => $match, "startres" => $startres);
-		push(@matches,\%tmp);
+		my $fracmatch = $nresmatch/(length($seqalign));
+		if ($match > 0 && $fracmatch > 0.5) {
+		    my %tmp = ("strength" => $match, "startres" => $startres);
+		    push(@matches,\%tmp);
+		}
 	    }
 	}
     }
