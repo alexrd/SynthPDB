@@ -1,5 +1,5 @@
 # SynthPDB
-Tools for synthesizing and batch processing files from the Protein Data Bank
+Tools for synthesizing and visualizing information from heterogeneous Protein Data Bank files
 
 ## Dependencies
 -  <a href="http://www.ks.uiuc.edu/Development/Download/download.cgi?PackageName=VMD">VMD - Visual Molecular Dynamics</a> 
