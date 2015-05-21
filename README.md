@@ -9,6 +9,7 @@ Tools for synthesizing and visualizing information from heterogeneous Protein Da
 -  visualize average amino acid properties
 -  clusters ligand positions across entire PDB set
 -  includes Bromodomain test case
+-  <a href="https://github.com/alexrd/SynthPDB/releases/tag/v0.1">Download</a>
 
 ## Contact
 Alex Dickson, Postdoctoral Researcher, University of Michigan
